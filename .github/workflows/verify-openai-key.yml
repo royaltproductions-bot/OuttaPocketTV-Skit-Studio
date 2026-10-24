@@ -56,3 +56,27 @@ jobs:
               print("FAILED: Could not complete the API check (" + type(exc).__name__ + ").")
               sys.exit(1)
           PY
+      - name: Check selected image model access (no generation)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          import urllib.request
+          import urllib.error
+          req = urllib.request.Request(
+              "https://api.openai.com/v1/models/gpt-image-2.5-flare",
+              headers={"Authorization": "Bearer " + os.environ["OPENAI_API_KEY"]},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=20) as response:
+                  if response.status == 200:
+                      print("PASS: The OpenAI account can retrieve gpt-image-2.5-flare.")
+                      print("NO image was generated; billing/quota cannot be confirmed by this test.")
+                  else:
+                      print("FAILED: Model lookup returned", response.status)
+                      sys.exit(1)
+          except urllib.error.HTTPError as exc:
+              print("FAILED: The requested image model is not accessible. HTTP", exc.code)
+              sys.exit(1)
+          PY
