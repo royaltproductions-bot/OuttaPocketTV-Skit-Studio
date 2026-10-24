@@ -1,0 +1,58 @@
+name: Verify OpenAI API Key
+
+on:
+  push:
+    paths:
+      - .github/workflows/verify-openai-key.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-key:
+    name: Test secret without exposing its value
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Authenticate to OpenAI without billable generation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          import urllib.request
+          import urllib.error
+
+          key = os.environ.get("OPENAI_API_KEY", "").strip()
+          if not key:
+              print("FAILED: OPENAI_API_KEY secret is missing or empty.")
+              sys.exit(1)
+          request = urllib.request.Request(
+              "https://api.openai.com/v1/models",
+              headers={"Authorization": "Bearer " + key},
+              method="GET",
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  if response.status == 200:
+                      print("PASS: OpenAI accepted the API key (HTTP 200). No image generated.")
+                      print("NOTE: Authentication alone does not verify image-model access or billing credits.")
+                  else:
+                      print("INCONCLUSIVE: OpenAI returned HTTP", response.status)
+                      sys.exit(1)
+          except urllib.error.HTTPError as exc:
+              print("FAILED: OpenAI authentication check returned HTTP", exc.code)
+              if exc.code == 401:
+                  print("The key was rejected or revoked.")
+              elif exc.code == 403:
+                  print("The key is restricted or lacks access to this endpoint.")
+              elif exc.code == 429:
+                  print("Request was rate-limited or quota-restricted; image access remains unverified.")
+              sys.exit(1)
+          except Exception as exc:
+              print("FAILED: Could not complete the API check (" + type(exc).__name__ + ").")
+              sys.exit(1)
+          PY
