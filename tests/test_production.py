@@ -50,11 +50,20 @@ class LiveStoreTests(unittest.TestCase):
             self.assertEqual(self.client.post('/api/preview', json=self.sample_payload).status_code, 403)
 
     def test_preview_is_branded_signed_and_one_per_email(self):
-        state = {'status': 'new', 'ts': '0'}
+        state = {'status': 'new', 'ts': '0', 'meter_date': '', 'meter_count': '0'}
         def fake_stripe(method, path, fields=None, **kwargs):
             if method == 'GET' and path == '/customers':
+                if fields and fields.get('email') == server.METER_EMAIL:
+                    return {'data': [{'id': 'cus_meter', 'metadata': {
+                        'optv_internal_meter': 'daily_previews',
+                        'optv_preview_day': state['meter_date'],
+                        'optv_preview_count': state['meter_count']}}]}
                 return {'data': [{'id': 'cus_1', 'metadata': {
                     'optv_sample_status': state['status'], 'optv_sample_updated': state['ts']}}]}
+            if method == 'POST' and path == '/customers/cus_meter':
+                state['meter_date'] = fields['metadata[optv_preview_day]']
+                state['meter_count'] = fields['metadata[optv_preview_count]']
+                return {'id': 'cus_meter'}
             if method == 'POST' and path == '/customers/cus_1':
                 state['status'] = fields['metadata[optv_sample_status]']
                 state['ts'] = fields['metadata[optv_sample_updated]']
@@ -67,6 +76,7 @@ class LiveStoreTests(unittest.TestCase):
             self.assertEqual(r.status_code, 200, r.text)
             data = r.json()
             self.assertEqual(state['status'], 'used')
+            self.assertEqual(state['meter_count'], '1')
             self.assertTrue(data['preview_image'].startswith('data:image/jpeg;base64,'))
             raw = base64.b64decode(data['preview_image'].split(',')[1])
             self.assertGreater(len(raw), 20000)
@@ -74,6 +84,36 @@ class LiveStoreTests(unittest.TestCase):
             self.assertEqual(parsed['e'], self.email)
             r2 = self.client.post('/api/preview',json=self.sample_payload)
             self.assertEqual(r2.status_code,409)
+
+    def test_daily_preview_budget_persists_after_restart(self):
+        os.environ['PREVIEW_LIMIT_DAILY'] = '1'
+        state = {'day': '', 'count': '0'}
+        def fake_stripe(method, path, fields=None, **kwargs):
+            if method == 'GET' and path == '/customers':
+                if fields['email'] == server.METER_EMAIL:
+                    return {'data': [{'id': 'cus_meter', 'metadata': {
+                        'optv_internal_meter': 'daily_previews',
+                        'optv_preview_day': state['day'], 'optv_preview_count': state['count']}}]}
+                return {'data': [{'id': 'cus_free', 'metadata': {'optv_sample_status': 'new'}}]}
+            if method == 'POST' and path == '/customers/cus_meter':
+                state['day'] = fields['metadata[optv_preview_day]']
+                state['count'] = fields['metadata[optv_preview_count]']
+                return {}
+            if method == 'POST' and path == '/customers/cus_free':
+                return {}
+            self.fail('Unexpected Stripe path: ' + path)
+        with patch.object(server, 'captcha'), patch.object(server, 'stripe', side_effect=fake_stripe), \
+             patch.object(server, 'generate_scene', return_value=b'jpeg-bytes'), \
+             patch.object(server, 'rate_limit'):
+            first = self.client.post('/api/preview', json=self.sample_payload)
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(state['count'], '1')
+            # Render Free instance may sleep/restart; shared Stripe metadata survives.
+            server._attempts.clear()
+            server._daily_counter.update(date='', total=0)
+            second = self.client.post('/api/preview', json={**self.sample_payload, 'email': 'second@example.test'})
+            self.assertEqual(second.status_code, 429, second.text)
+            self.assertEqual(state['count'], '1')
 
     def test_forged_checkout_token_rejected_without_calling_stripe(self):
         payload=server.make_token({'v':1,'e':self.email,'i':'Fun original comedy idea','s':'Cinematic comedy','t':int(time.time())})

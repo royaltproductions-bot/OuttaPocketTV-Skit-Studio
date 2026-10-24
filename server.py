@@ -40,6 +40,7 @@ app.mount('/static', StaticFiles(directory=STATIC), name='static')
 _guard = threading.RLock()
 _attempts: dict[str, deque[float]] = defaultdict(deque)
 _daily_counter = {'date': '', 'total': 0}
+METER_EMAIL = 'optv-preview-meter@internal.invalid'
 
 
 def env(name, default=''):
@@ -165,6 +166,39 @@ def customer_for_email(email):
     return stripe('POST', '/customers', {'email': email,
                  'metadata[optv_sample_status]': 'new',
                  'description': 'OuttaPocketTV free sample request'}, idempotency=idem)
+
+
+
+def reserve_daily_preview_budget():
+    """Persistent, conservative daily cost limit in Stripe customer metadata.
+
+    This is a single-instance reserve-before-generate counter. We deploy one
+    Uvicorn worker; Render Free cannot horizontally scale. Stripe preserves the
+    count across sleeps and redeploys, unlike local RAM. Stripe metadata writes
+    are not compare-and-swap; do not scale horizontally without a real atomic
+    counter service.
+    """
+    day = datetime.now(timezone.utc).date().isoformat()
+    limit = max(1, min(int(env('PREVIEW_LIMIT_DAILY', '5')), 500))
+    entries = stripe('GET', '/customers', {'email': METER_EMAIL, 'limit': 100}).get('data', [])
+    meter = next((row for row in entries if
+                  (row.get('metadata') or {}).get('optv_internal_meter') == 'daily_previews'), None)
+    if meter is None:
+        meter = stripe('POST', '/customers', {
+            'email': METER_EMAIL,
+            'description': 'INTERNAL: OuttaPocketTV global free-preview budget counter',
+            'metadata[optv_internal_meter]': 'daily_previews',
+            'metadata[optv_preview_day]': day,
+            'metadata[optv_preview_count]': '0',
+        }, idempotency='optv-preview-meter-v1')
+    meta = meter.get('metadata') or {}
+    count = int(meta.get('optv_preview_count') or '0') if meta.get('optv_preview_day') == day else 0
+    if count >= limit:
+        raise HTTPException(429, "Today's free previews are fully booked. Try tomorrow.")
+    stripe('POST', '/customers/' + meter['id'], {
+        'metadata[optv_preview_day]': day,
+        'metadata[optv_preview_count]': str(count + 1),
+    })
 
 
 def customer_state(customer_id, status):
@@ -332,6 +366,9 @@ def preview(item: PreviewInput, request: Request):
         last = int(meta.get('optv_sample_updated') or '0')
         if state == 'used' or (state == 'reserved' and time.time() - last < 1200):
             raise HTTPException(409, 'A free sample has already been requested for this email.')
+        # Reserve global spend before calling the billable OpenAI endpoint.
+        # A failed generation still counts against today's cap (fail-closed).
+        reserve_daily_preview_budget()
         customer_state(customer['id'], 'reserved')
     try:
         picture = generate_scene(idea, style, email)
