@@ -34,6 +34,7 @@ Set private **Render** environment variables (GitHub Actions secrets do **not** 
 | Name | Required for |
 |---|---|
 | `STRIPE_SECRET_KEY` | Preview ledger, checkout, paid-order list; use the correct Stripe business |
+| `STRIPE_WEBHOOK_SECRET` | Verify live checkout completion events; configure the Stripe event destination for `/api/stripe/webhook` |
 | `OPENAI_API_KEY` | AI free preview generation, separately billed |
 | `TURNSTILE_SITE_KEY` | Public challenge widget |
 | `TURNSTILE_SECRET_KEY` | Verify requests before generating AI images |
@@ -45,6 +46,8 @@ Set private **Render** environment variables (GitHub Actions secrets do **not** 
 Optional: `TURNSTILE_HOSTNAME` to match production host, `PUBLIC_BASE_URL`, `SUPPORT_EMAIL`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (contact API only). Live website **does not** call Stripe or OpenAI until their private service credentials exist.
 
 `/healthz` is the service health check. `/api/config` reports provider readiness without exposing keys. `/admin` shows paid orders after owner token entry; clicking **EMAIL CUSTOMER** opens a prefilled mail draft, to which the owner attaches the finished MP4. Click **MARK DELIVERED** only *after* actually sending it; that updates Stripe metadata. No automatic MP4 file delivery or email notifications are claimed.
+
+Register a **live** Stripe event destination at `https://outtapockettv-skit-studio.onrender.com/api/stripe/webhook` for `checkout.session.completed` and `checkout.session.async_payment_succeeded`, then set its `whsec_` signing secret in Render. The handler checks Stripe's signed request and payment status before recording verification in the corresponding Stripe Checkout Session. Checkout remains disabled until the webhook secret is configured. This endpoint does not email the owner or deliver an MP4; orders remain visible in Stripe and `/admin` for manual fulfillment. Do not use the webhook signing secret from a test-mode event destination in live mode.
 
 ## Customer policies to confirm before taking real payments
 

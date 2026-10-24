@@ -59,7 +59,8 @@ def configured():
 
 
 def payment_ready():
-    return bool(env('STRIPE_SECRET_KEY') and env('APP_SIGNING_SECRET'))
+    return bool(env('STRIPE_SECRET_KEY') and env('APP_SIGNING_SECRET')
+                and env('STRIPE_WEBHOOK_SECRET'))
 
 
 class PreviewInput(BaseModel):
@@ -409,7 +410,6 @@ def create_checkout_session(detail, notes, fingerprint):
         'metadata[optv_product]': PRODUCT_KEY, 'metadata[idea]': detail['i'],
         'metadata[style]': detail['s'], 'metadata[instructions]': notes,
         'metadata[fulfillment]': 'awaiting_manual_delivery',
-        'payment_method_types[0]': 'card',
     }
     session = stripe('POST', '/checkout/sessions', fields, idempotency='optv-checkout-' + fingerprint)
     url = session.get('url', '')
@@ -456,6 +456,55 @@ def order_status(session_id: str):
     paid = obj.get('payment_status') == 'paid'
     return {'status': ('delivered' if obj.get('metadata', {}).get('delivered_at') else 'paid') if paid else 'unpaid',
             'paid': paid, 'amount_cents': obj.get('amount_total')}
+
+
+def verified_stripe_event(payload: bytes, signature: str):
+    """Verify Stripe's timestamped signature before trusting a payment event."""
+    secret = env('STRIPE_WEBHOOK_SECRET')
+    if not secret:
+        raise HTTPException(503, 'Payment notifications are not configured.')
+    fields = {}
+    for segment in signature.split(','):
+        key, separator, value = segment.strip().partition('=')
+        if separator:
+            fields.setdefault(key, []).append(value)
+    try:
+        timestamp = int(fields.get('t', [''])[0])
+        if abs(time.time() - timestamp) > 300:
+            raise ValueError('Webhook timestamp outside tolerance')
+        expected = hmac.new(secret.encode(), str(timestamp).encode() + b'.' + payload,
+                            hashlib.sha256).hexdigest()
+        if not any(hmac.compare_digest(expected, candidate) for candidate in fields.get('v1', [])):
+            raise ValueError('Webhook signature mismatch')
+        event = json.loads(payload)
+        if not isinstance(event, dict):
+            raise ValueError('Webhook is not a JSON object')
+        return event
+    except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(400, 'Invalid payment event signature.')
+
+
+@app.post('/api/stripe/webhook')
+async def stripe_webhook(request: Request):
+    event = verified_stripe_event(await request.body(), request.headers.get('Stripe-Signature', ''))
+    if event.get('type') not in {'checkout.session.completed', 'checkout.session.async_payment_succeeded'}:
+        return {'received': True}
+    session = (event.get('data') or {}).get('object') or {}
+    session_id = session.get('id', '')
+    if not isinstance(session_id, str) or not re.fullmatch(r'cs_(?:test_)?[A-Za-z0-9_]{12,160}', session_id):
+        return {'received': True}
+    if (session.get('metadata') or {}).get('optv_product') != PRODUCT_KEY or session.get('payment_status') != 'paid':
+        return {'received': True}
+    # Stripe remains the durable order ledger. A repeated webhook writes no new fulfillment action.
+    actual = get_order(session_id)
+    if actual.get('payment_status') != 'paid':
+        raise HTTPException(409, 'Payment has not settled yet.')
+    if (actual.get('metadata') or {}).get('optv_payment_event_id') != event.get('id'):
+        stripe('POST', '/checkout/sessions/' + session_id, {
+            'metadata[optv_payment_event_id]': str(event.get('id', ''))[:160],
+            'metadata[optv_payment_verified_at]': datetime.now(timezone.utc).isoformat(),
+        }, idempotency='optv-confirm-' + hashlib.sha256(str(event.get('id', '')).encode()).hexdigest())
+    return {'received': True}
 
 
 @app.get('/api/admin/orders')

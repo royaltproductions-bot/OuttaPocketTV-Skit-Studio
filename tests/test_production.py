@@ -1,6 +1,9 @@
 """Automated behavior tests; mock paid external APIs, never charge cards."""
 import base64
+import hashlib
+import hmac
 import io
+import json
 import os
 import time
 import unittest
@@ -15,6 +18,7 @@ class LiveStoreTests(unittest.TestCase):
         self.keys = patch.dict(os.environ, {
             'OPENAI_API_KEY': 'test-openai-secret',
             'STRIPE_SECRET_KEY': 'sk_test_placeholder',
+            'STRIPE_WEBHOOK_SECRET': 'whsec_test-only-verified',
             'APP_SIGNING_SECRET': 'test-signing-key-long-enough-for-test-only',
             'ADMIN_TOKEN': 'admin-private-test-token',
             'TURNSTILE_SITE_KEY': 'test-site-key',
@@ -44,6 +48,11 @@ class LiveStoreTests(unittest.TestCase):
         r = self.client.post('/api/preview', json=self.sample_payload)
         self.assertEqual(r.status_code, 503)
         self.assertEqual(self.client.get('/api/config').json()['preview_enabled'], False)
+
+    def test_checkout_requires_signed_payment_notifications(self):
+        os.environ.pop('STRIPE_WEBHOOK_SECRET')
+        self.assertFalse(server.payment_ready())
+        self.assertFalse(self.client.get('/api/config').json()['checkout_enabled'])
 
     def test_preview_captcha_blocks_request(self):
         with patch.object(server, 'captcha', side_effect=server.HTTPException(403, 'denied')):
@@ -196,6 +205,48 @@ class LiveStoreTests(unittest.TestCase):
         self.assertEqual(r.status_code,200,r.text)
         self.assertTrue(any(x[1].startswith('/checkout/sessions/') and x[0]=='POST' for x in operations))
         self.assertFalse(r.json()['sent_by_site'])
+
+    def test_stripe_webhook_checks_signature_payment_and_idempotency(self):
+        session_id = 'cs_test_abcde123456789012345'
+        event = {'id': 'evt_verified_123', 'type': 'checkout.session.completed',
+                 'data': {'object': {'id': session_id, 'payment_status': 'paid',
+                                     'metadata': {'optv_product': server.PRODUCT_KEY}}}}
+        payload = json.dumps(event).encode()
+        timestamp = str(int(time.time()))
+        signature = hmac.new(os.environ['STRIPE_WEBHOOK_SECRET'].encode(),
+                             timestamp.encode() + b'.' + payload, hashlib.sha256).hexdigest()
+        header = {'Stripe-Signature': f't={timestamp},v1={signature}', 'Content-Type': 'application/json'}
+        writes = []
+        def fake_stripe(method, path, fields=None, **kwargs):
+            if method == 'GET':
+                return {'payment_status': 'paid', 'metadata': {'optv_product': server.PRODUCT_KEY}}
+            writes.append((path, fields))
+            return {}
+        with patch.object(server, 'stripe', side_effect=fake_stripe):
+            accepted = self.client.post('/api/stripe/webhook', content=payload, headers=header)
+            self.assertEqual(accepted.status_code, 200, accepted.text)
+            self.assertEqual(len(writes), 1)
+            self.assertEqual(writes[0][1]['metadata[optv_payment_event_id]'], event['id'])
+            tampered = self.client.post('/api/stripe/webhook', content=payload + b' ', headers=header)
+            self.assertEqual(tampered.status_code, 400)
+            self.assertEqual(len(writes), 1)
+
+    def test_stripe_webhook_ignores_unpaid_and_unrelated_events(self):
+        for event_type, payment_status in [('checkout.session.completed', 'unpaid'),
+                                           ('customer.created', 'paid')]:
+            event = {'id': 'evt_ignored', 'type': event_type,
+                     'data': {'object': {'id': 'cs_test_abcde123456789012345',
+                                         'payment_status': payment_status,
+                                         'metadata': {'optv_product': server.PRODUCT_KEY}}}}
+            payload = json.dumps(event).encode()
+            timestamp = str(int(time.time()))
+            signature = hmac.new(os.environ['STRIPE_WEBHOOK_SECRET'].encode(),
+                                 timestamp.encode() + b'.' + payload, hashlib.sha256).hexdigest()
+            with patch.object(server, 'stripe') as stripe_api:
+                r = self.client.post('/api/stripe/webhook', content=payload,
+                    headers={'Stripe-Signature': f't={timestamp},v1={signature}'})
+                self.assertEqual(r.status_code, 200, r.text)
+                stripe_api.assert_not_called()
 
     def test_web_security_headers(self):
         r=self.client.get('/')
