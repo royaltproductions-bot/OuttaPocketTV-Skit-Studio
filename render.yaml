@@ -1,0 +1,28 @@
+# Free-tier pilot. All durable order and free-preview metadata lives in Stripe.
+# Required keys must be configured privately in Render before opening the site.
+services:
+  - type: web
+    name: outtapockettv-skit-studio
+    runtime: docker
+    plan: free
+    region: virginia
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: PREVIEW_LIMIT_DAILY
+        value: '5'
+      - key: OPENAI_IMAGE_MODEL
+        value: gpt-image-2.5-flare
+      - key: APP_SIGNING_SECRET
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+# No paid disk or database. Render Free is not guaranteed production uptime.
