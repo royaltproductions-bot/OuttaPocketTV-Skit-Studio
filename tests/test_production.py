@@ -135,6 +135,42 @@ class LiveStoreTests(unittest.TestCase):
             self.assertEqual(r.status_code,200,r.text)
             self.assertIn('checkout.stripe.com',r.json()['checkout_url'])
 
+    def test_direct_checkout_works_without_openai_and_does_not_call_image_model(self):
+        os.environ.pop('OPENAI_API_KEY', None)
+        payload = {'email': self.email, 'idea': self.sample_payload['idea'],
+                   'style': 'Cinematic comedy', 'turnstile_token': 'test-captcha'}
+        calls = []
+        def fake_stripe(method, path, fields=None, **kwargs):
+            calls.append((path, fields))
+            self.assertEqual(method, 'POST')
+            self.assertEqual(path, '/checkout/sessions')
+            self.assertEqual(fields['customer_email'], self.email)
+            self.assertEqual(fields['metadata[idea]'], self.sample_payload['idea'])
+            self.assertEqual(fields['line_items[0][price_data][unit_amount]'], '2999')
+            return {'url': 'https://checkout.stripe.com/c/pay/purchase'}
+        with patch.object(server, 'captcha') as challenge, \
+             patch.object(server, 'stripe', side_effect=fake_stripe), \
+             patch.object(server, 'generate_scene') as ai:
+            res = self.client.post('/api/checkout-direct', json=payload)
+            self.assertEqual(res.status_code, 200, res.text)
+            self.assertIn('checkout.stripe.com', res.json()['checkout_url'])
+            self.assertEqual(len(calls), 1)
+            challenge.assert_called_once()
+            ai.assert_not_called()
+
+    def test_direct_checkout_rejects_bad_email_or_failed_challenge(self):
+        payload = {'email': 'invalid', 'idea': self.sample_payload['idea'],
+                   'style': 'Cinematic comedy', 'turnstile_token': 'bad'}
+        with patch.object(server, 'stripe') as payment:
+            res = self.client.post('/api/checkout-direct', json=payload)
+            self.assertEqual(res.status_code, 400)
+            payment.assert_not_called()
+        payload['email'] = self.email
+        with patch.object(server, 'captcha', side_effect=server.HTTPException(403, 'challenge failed')), \
+             patch.object(server, 'stripe') as payment:
+            self.assertEqual(self.client.post('/api/checkout-direct', json=payload).status_code, 403)
+            payment.assert_not_called()
+
     def test_order_retrieval_verifies_paid_status_and_product(self):
         session='cs_test_abcde123456789012345'
         with patch.object(server,'stripe',return_value={'metadata':{'optv_product':server.PRODUCT_KEY},'payment_status':'unpaid','amount_total':2999}):

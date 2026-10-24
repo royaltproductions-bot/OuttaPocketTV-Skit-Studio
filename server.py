@@ -74,6 +74,14 @@ class CheckoutInput(BaseModel):
     instructions: str = Field(default='', max_length=450)
 
 
+class DirectCheckoutInput(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    idea: str = Field(min_length=18, max_length=450)
+    style: str = Field(default='Cinematic comedy', max_length=30)
+    instructions: str = Field(default='', max_length=450)
+    turnstile_token: str = Field(min_length=1, max_length=2500)
+
+
 class DeliveredInput(BaseModel):
     session_id: str = Field(pattern=r'^cs_(test_)?[A-Za-z0-9_]{12,160}$')
 
@@ -385,13 +393,10 @@ def preview(item: PreviewInput, request: Request):
             'mode': 'ai', 'price_cents': PRICE_CENTS}
 
 
-@app.post('/api/checkout')
-def checkout(item: CheckoutInput):
-    if not payment_ready():
-        raise HTTPException(503, 'Secure checkout is not enabled yet.')
-    detail = read_token(item.preview_token)
-    notes = item.instructions.strip()
-    fingerprint = hashlib.sha256((item.preview_token + notes).encode()).hexdigest()
+def create_checkout_session(detail, notes, fingerprint):
+    # Idempotency within 20-minute windows avoids accidental duplicate sessions
+    # but lets previous customers order another skit in future.
+    fingerprint = hashlib.sha256((fingerprint + str(int(time.time() // 1200))).encode()).hexdigest()
     fields = {
         'mode': 'payment', 'customer_email': detail['e'],
         'client_reference_id': 'optv-' + fingerprint[:28],
@@ -411,6 +416,29 @@ def checkout(item: CheckoutInput):
     if not url.startswith('https://checkout.stripe.com/'):
         raise HTTPException(502, 'Secure checkout could not be started.')
     return {'checkout_url': url}
+
+
+@app.post('/api/checkout')
+def checkout(item: CheckoutInput):
+    if not payment_ready():
+        raise HTTPException(503, 'Secure checkout is not enabled yet.')
+    detail = read_token(item.preview_token)
+    notes = item.instructions.strip()
+    return create_checkout_session(detail, notes, item.preview_token + notes)
+
+
+@app.post('/api/checkout-direct')
+def checkout_direct(item: DirectCheckoutInput, request: Request):
+    # Allow purchases after a browser tab is closed or a free preview was used.
+    if not payment_ready() or not env('TURNSTILE_SECRET_KEY'):
+        raise HTTPException(503, 'Secure checkout is not available yet.')
+    email = valid_email(item.email)
+    idea, style = item.idea.strip(), item.style.strip()
+    if len(idea) < 18 or style not in STYLES:
+        raise HTTPException(400, 'Enter an original skit idea and choose a valid style.')
+    captcha(item.turnstile_token, request.client.host if request.client else 'unknown')
+    notes = item.instructions.strip()
+    return create_checkout_session({'e': email, 'i': idea, 's': style}, notes, email + idea + style + notes)
 
 
 def get_order(session_id):

@@ -6,14 +6,14 @@ A real working web storefront that generates a free watermarked AI scene, then s
 
 - **GitHub:** public source code only. Never store keys, customer data, or generated customer media.
 - **Render:** one web service, free plan possible. It runs the secure website/API but stores no customer data on disk. Free Render can sleep and has no uptime guarantee.
-- **Stripe:** the payment and order ledger: hosted checkout, customer email, skit idea, style, instructions, payment status, order-fulfilled timestamp. Server verifies order state directly against Stripe; never trusts the browser's payment claims.
-- **OpenAI:** customer scene illustrations, branded on our own server with the canonical OuttaPocketTV logo. The generated file is sent to the browser, not retained server-side.
-- **Cloudflare Turnstile:** verifies free preview requests. Stripe Customer metadata records one sample per email. Single-process IP limits and a daily cap are additional *temporary in-memory* safeguards, not globally durable rate-limits. Set an OpenAI project budget/alerts before opening free generations. Email aliases, repeated restarts and distributed sources can bypass some safeguards.
+- **Stripe:** the payment, order, and global preview-budget ledger: hosted checkout, customer email, skit idea, style, instructions, payment status, order-fulfilled timestamp. Server verifies order state directly against Stripe; never trusts the browser's payment claims.
+- **OpenAI:** customer scene illustrations, branded on our own server with the canonical OuttaPocketTV logo. The generated file is sent to the browser, not retained server-side. Customers may also purchase a video directly without using a free preview, useful if they return after closing their browser.
+- **Cloudflare Turnstile:** verifies free preview requests. Stripe Customer metadata records one sample per email. A persistent global daily preview counter is reserved in Stripe customer metadata **before** each OpenAI generation, surviving instance restarts. Temporary per-IP throttling provides an additional defense. The persistent counter assumes exactly one app worker and must be replaced with an atomic limit when horizontally scaling. Set an OpenAI project budget/alerts before opening free generations. Email aliases, repeated restarts and distributed sources can bypass some safeguards.
 - **Fulfillment:** owner creates the actual video, sends MP4 by email, and records completed delivery in Stripe using `/admin`. No video-generation charges until an order is placed.
 
 ## Privacy and security
 
-No local SQLite database, persistent volume or uploaded MP4s. Customer ideas and email go to Stripe in order/customer records. Scene text (not email) goes to OpenAI, plus a pseudonymous identifier. Turnstile receives verification requests. Never put any secret or customer data in the **public repository**. Owner access uses a private `ADMIN_TOKEN` bearer secret; no client-provided prices. HTML has CSP, security headers, strict input lengths and signed 72-hour preview tokens. Signed tokens are not encrypted; treat them as customer-private browser data.
+No local SQLite database, persistent volume or uploaded MP4s. Customer ideas and email go to Stripe in order/customer records. Scene text (not email) goes to OpenAI, plus a pseudonymous identifier. Turnstile receives verification requests. Never put any secret or customer data in the **public repository**. Owner access uses a private `ADMIN_TOKEN` bearer secret; no client-provided prices. HTML has CSP, security headers, strict input lengths and signed 72-hour preview tokens. Direct checkout requests are protected with Turnstile and do not invoke OpenAI. Signed tokens are not encrypted; treat them as customer-private browser data.
 
 ## Local smoke test
 
@@ -39,7 +39,7 @@ Set private **Render** environment variables (GitHub Actions secrets do **not** 
 | `TURNSTILE_SECRET_KEY` | Verify requests before generating AI images |
 | `APP_SIGNING_SECRET` | Sign checkout entitlement tokens (use 32+ random bytes) |
 | `ADMIN_TOKEN` | Private owner dashboard (use different random value) |
-| `PREVIEW_LIMIT_DAILY=5` | Conservative daily per-instance backstop |
+| `PREVIEW_LIMIT_DAILY=5` | Persistent global daily cap stored in Stripe, plus per-instance backstop |
 | `OPENAI_IMAGE_MODEL=gpt-image-2.5-flare` | Explicit image model |
 
 Optional: `TURNSTILE_HOSTNAME` to match production host, `PUBLIC_BASE_URL`, `SUPPORT_EMAIL`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (contact API only). Live website **does not** call Stripe or OpenAI until their private service credentials exist.
