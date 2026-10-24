@@ -9,8 +9,6 @@ services:
     healthCheckPath: /healthz
     autoDeployTrigger: commit
     envVars:
-      - key: PREVIEW_LIMIT_DAILY
-        value: '5'
       - key: OPENAI_IMAGE_MODEL
         value: gpt-image-2.5-flare
       - key: APP_SIGNING_SECRET

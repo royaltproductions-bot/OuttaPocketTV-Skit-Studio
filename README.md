@@ -8,7 +8,7 @@ A real working web storefront that generates a free watermarked AI scene, then s
 - **Render:** one web service, free plan possible. It runs the secure website/API but stores no customer data on disk. Free Render can sleep and has no uptime guarantee.
 - **Stripe:** the payment, order, and global preview-budget ledger: hosted checkout, customer email, skit idea, style, instructions, payment status, order-fulfilled timestamp. Server verifies order state directly against Stripe; never trusts the browser's payment claims.
 - **OpenAI:** customer scene illustrations, branded on our own server with the canonical OuttaPocketTV logo. The generated file is sent to the browser, not retained server-side. Customers may also purchase a video directly without using a free preview, useful if they return after closing their browser.
-- **Cloudflare Turnstile:** verifies free preview requests. Stripe Customer metadata records one sample per email. A persistent global daily preview counter is reserved in Stripe customer metadata **before** each OpenAI generation, surviving instance restarts. Temporary per-IP throttling provides an additional defense. The persistent counter assumes exactly one app worker and must be replaced with an atomic limit when horizontally scaling. Set an OpenAI project budget/alerts before opening free generations. Email aliases, repeated restarts and distributed sources can bypass some safeguards.
+- **Cloudflare Turnstile:** verifies free preview requests. Stripe Customer metadata records one sample per email, surviving instance restarts. Temporary per-IP throttling slows abuse, with **no global daily generation cap**. Set OpenAI project spending alerts before opening free generations. Email aliases and distributed sources can bypass some safeguards.
 - **Fulfillment:** owner creates the actual video, sends MP4 by email, and records completed delivery in Stripe using `/admin`. No video-generation charges until an order is placed.
 
 ## Privacy and security
@@ -40,7 +40,6 @@ Set private **Render** environment variables (GitHub Actions secrets do **not** 
 | `TURNSTILE_SECRET_KEY` | Verify requests before generating AI images |
 | `APP_SIGNING_SECRET` | Sign checkout entitlement tokens (use 32+ random bytes) |
 | `ADMIN_TOKEN` | Private owner dashboard (use different random value) |
-| `PREVIEW_LIMIT_DAILY=5` | Persistent global daily cap stored in Stripe, plus per-instance backstop |
 | `OPENAI_IMAGE_MODEL=gpt-image-2.5-flare` | Explicit image model |
 
 Optional: `TURNSTILE_HOSTNAME` to match production host, `PUBLIC_BASE_URL`, `SUPPORT_EMAIL`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (contact API only). Live website **does not** call Stripe or OpenAI until their private service credentials exist.
