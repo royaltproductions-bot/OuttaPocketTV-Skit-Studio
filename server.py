@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
 import io
 import json
 import os
@@ -52,8 +53,7 @@ def base_url():
 
 
 def configured():
-    return bool(env('OPENAI_API_KEY') and env('STRIPE_SECRET_KEY') and env('APP_SIGNING_SECRET')
-                and env('TURNSTILE_SITE_KEY') and env('TURNSTILE_SECRET_KEY'))
+    return bool(env('OPENAI_API_KEY') and env('STRIPE_SECRET_KEY') and env('APP_SIGNING_SECRET'))
 
 
 def payment_ready():
@@ -65,7 +65,6 @@ class PreviewInput(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     idea: str = Field(min_length=18, max_length=450)
     style: str = Field(default='Cinematic comedy', max_length=30)
-    turnstile_token: str = Field(min_length=1, max_length=2500)
 
 
 class CheckoutInput(BaseModel):
@@ -78,7 +77,6 @@ class DirectCheckoutInput(BaseModel):
     idea: str = Field(min_length=18, max_length=450)
     style: str = Field(default='Cinematic comedy', max_length=30)
     instructions: str = Field(default='', max_length=450)
-    turnstile_token: str = Field(min_length=1, max_length=2500)
 
 
 class DeliveredInput(BaseModel):
@@ -88,7 +86,6 @@ class DeliveredInput(BaseModel):
 class ContactInput(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     message: str = Field(min_length=8, max_length=1200)
-    turnstile_token: str = Field(min_length=1, max_length=2500)
 
 
 def valid_email(raw):
@@ -122,35 +119,30 @@ def stripe(method, path, fields=None, *, idempotency=None):
         raise HTTPException(502, 'Payment service returned an invalid response.')
 
 
-def captcha(token: str, ip: str):
-    secret = env('TURNSTILE_SECRET_KEY')
-    if not secret:
-        raise HTTPException(503, 'Free previews are not enabled yet.')
-    try:
-        response = requests.post('https://challenges.cloudflare.com/turnstile/v0/siteverify',
-                                 data={'secret': secret, 'response': token, 'remoteip': ip}, timeout=12)
-        data = response.json()
-    except (requests.RequestException, ValueError):
-        raise HTTPException(503, 'Security check is unavailable. Please retry.')
-    if not data.get('success'):
-        raise HTTPException(403, 'Please complete the human verification and retry.')
-    # If configured, enforce the challenge is meant for this exact site.
-    expected = env('TURNSTILE_HOSTNAME')
-    if expected and data.get('hostname') != expected:
-        raise HTTPException(403, 'Invalid verification origin.')
+def client_ip(request: Request) -> str:
+    """Render's edge supplies the visitor address in X-Forwarded-For."""
+    if env('RENDER_EXTERNAL_HOSTNAME'):
+        forwarded = request.headers.get('x-forwarded-for', '')
+        if forwarded:
+            candidate = forwarded.split(',')[0].strip()
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError:
+                pass
+    return request.client.host if request.client else 'unknown'
 
 
-def rate_limit(ip: str):
-    # Throttle bursts from one connection without imposing a global daily quota.
-    # Turnstile and one-free-sample-per-email checks run independently.
-    hashed = hashlib.sha256((env('APP_SIGNING_SECRET') + ip).encode()).hexdigest()
+def rate_limit(ip: str, *, scope='preview', limit=3):
+    # Per-IP burst protection; one free sample per email is persisted in Stripe.
+    # The in-memory IP buckets reset when Render restarts; no global daily cap.
+    hashed = hashlib.sha256((env('APP_SIGNING_SECRET') + scope + ip).encode()).hexdigest()
     ts = time.time()
     with _guard:
         dq = _attempts[hashed]
         while dq and dq[0] < ts - 3600:
             dq.popleft()
-        if len(dq) >= 3:
-            raise HTTPException(429, 'Too many previews from this connection. Try later.')
+        if len(dq) >= limit:
+            raise HTTPException(429, 'Too many requests from this connection. Try later.')
         dq.append(ts)
 
 
@@ -279,9 +271,9 @@ async def headers(request, call_next):
         'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; "
+        'Content-Security-Policy': "default-src 'self'; script-src 'self'; "
                                    "style-src 'self'; img-src 'self' data: blob:; "
-                                   "frame-src https://challenges.cloudflare.com; connect-src 'self'; "
+                                   "frame-src 'none'; connect-src 'self'; "
                                    "form-action 'self' https://checkout.stripe.com; base-uri 'self'; object-src 'none'",
         'Cache-Control': 'no-store' if request.url.path.startswith('/api/') else 'public, max-age=180',
     })
@@ -313,8 +305,7 @@ def health():
 @app.get('/api/config')
 def config():
     return {'preview_enabled': configured(), 'checkout_enabled': payment_ready(),
-            'turnstile_site_key': env('TURNSTILE_SITE_KEY'), 'price_cents': PRICE_CENTS,
-            'fulfillment': 'manual_email', 'version': '1.0'}
+            'price_cents': PRICE_CENTS, 'fulfillment': 'manual_email', 'version': '1.1'}
 
 
 @app.post('/api/preview')
@@ -324,9 +315,7 @@ def preview(item: PreviewInput, request: Request):
     email, idea, style = valid_email(item.email), item.idea.strip(), item.style.strip()
     if len(idea) < 18 or style not in STYLES:
         raise HTTPException(400, 'Enter an original skit idea and choose a valid style.')
-    ip = request.client.host if request.client else 'unknown'
-    captcha(item.turnstile_token, ip)
-    rate_limit(ip)
+    rate_limit(client_ip(request))
     with _guard:
         customer = customer_for_email(email)
         meta = customer.get('metadata') or {}
@@ -386,13 +375,13 @@ def checkout(item: CheckoutInput):
 @app.post('/api/checkout-direct')
 def checkout_direct(item: DirectCheckoutInput, request: Request):
     # Allow purchases after a browser tab is closed or a free preview was used.
-    if not payment_ready() or not env('TURNSTILE_SECRET_KEY'):
+    if not payment_ready():
         raise HTTPException(503, 'Secure checkout is not available yet.')
     email = valid_email(item.email)
     idea, style = item.idea.strip(), item.style.strip()
     if len(idea) < 18 or style not in STYLES:
         raise HTTPException(400, 'Enter an original skit idea and choose a valid style.')
-    captcha(item.turnstile_token, request.client.host if request.client else 'unknown')
+    rate_limit(client_ip(request), scope='checkout', limit=15)
     notes = item.instructions.strip()
     return create_checkout_session({'e': email, 'i': idea, 's': style}, notes, email + idea + style + notes)
 
@@ -507,9 +496,9 @@ def contact(item: ContactInput, request: Request):
     to = env('SUPPORT_EMAIL')
     key = env('RESEND_API_KEY')
     sender = env('RESEND_FROM_EMAIL')
-    if not (to and key and sender and env('TURNSTILE_SECRET_KEY')):
+    if not (to and key and sender):
         raise HTTPException(503, 'Contact email is not enabled yet.')
-    captcha(item.turnstile_token, request.client.host if request.client else 'unknown')
+    rate_limit(client_ip(request), scope='contact')
     sender_email = valid_email(item.email)
     body = {'from': sender, 'to': [to], 'subject': 'OuttaPocketTV website inquiry',
             'text': 'Reply to: ' + sender_email + '\n\n' + item.message.strip(),

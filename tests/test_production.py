@@ -21,8 +21,6 @@ class LiveStoreTests(unittest.TestCase):
             'STRIPE_WEBHOOK_SECRET': 'whsec_test-only-verified',
             'APP_SIGNING_SECRET': 'test-signing-key-long-enough-for-test-only',
             'ADMIN_TOKEN': 'admin-private-test-token',
-            'TURNSTILE_SITE_KEY': 'test-site-key',
-            'TURNSTILE_SECRET_KEY': 'test-turnstile-secret',
         })
         self.keys.start()
         self.addCleanup(self.keys.stop)
@@ -30,7 +28,7 @@ class LiveStoreTests(unittest.TestCase):
         server._attempts.clear()
         self.email = 'buyer@example.test'
         self.sample_payload = {'email': self.email, 'idea': 'A superhero uses X-ray vision to find his car keys in his own pocket.',
-                               'style': 'Cinematic comedy', 'turnstile_token': 'test-captcha'}
+                               'style': 'Cinematic comedy'}
 
     def test_site_works_without_db(self):
         for path in ['/', '/order', '/admin', '/static/app.css', '/static/optv-logo.webp', '/healthz']:
@@ -52,9 +50,23 @@ class LiveStoreTests(unittest.TestCase):
         self.assertFalse(server.payment_ready())
         self.assertFalse(self.client.get('/api/config').json()['checkout_enabled'])
 
-    def test_preview_captcha_blocks_request(self):
-        with patch.object(server, 'captcha', side_effect=server.HTTPException(403, 'denied')):
-            self.assertEqual(self.client.post('/api/preview', json=self.sample_payload).status_code, 403)
+    def test_free_preview_ip_throttle(self):
+        used = {'data': [{'id': 'cus_used', 'metadata': {'optv_sample_status': 'used'}}]}
+        with patch.object(server, 'stripe', return_value=used) as payment:
+            for _ in range(3):
+                self.client.post('/api/preview', json=self.sample_payload)
+            response = self.client.post('/api/preview', json=self.sample_payload)
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(payment.call_count, 3)
+
+    def test_render_forwarded_client_ip_used_when_available(self):
+        from starlette.requests import Request
+        scope = {'type': 'http', 'headers': [(b'x-forwarded-for', b'203.0.113.7, 198.51.100.1')],
+                 'client': ('10.0.0.1', 1234)}
+        with patch.dict(os.environ, {'RENDER_EXTERNAL_HOSTNAME': 'example.onrender.com'}):
+            self.assertEqual(server.client_ip(Request(scope)), '203.0.113.7')
+        with patch.dict(os.environ, {'RENDER_EXTERNAL_HOSTNAME': ''}):
+            self.assertEqual(server.client_ip(Request(scope)), '10.0.0.1')
 
     def test_preview_is_branded_signed_and_one_per_email(self):
         state = {'status': 'new', 'ts': '0'}
@@ -69,7 +81,7 @@ class LiveStoreTests(unittest.TestCase):
             self.fail('Unexpected Stripe request '+path)
         output = io.BytesIO()
         Image.new('RGB', (1024,1536), (116,44,92)).save(output, 'PNG')
-        with patch.object(server,'captcha'), patch.object(server,'stripe',side_effect=fake_stripe),patch.object(server,'generate_scene',return_value=server.brand_image(output.getvalue(),'anything','Cinematic comedy')):
+        with patch.object(server,'stripe',side_effect=fake_stripe),patch.object(server,'generate_scene',return_value=server.brand_image(output.getvalue(),'anything','Cinematic comedy')):
             r = self.client.post('/api/preview',json=self.sample_payload)
             self.assertEqual(r.status_code, 200, r.text)
             data = r.json()
@@ -93,7 +105,7 @@ class LiveStoreTests(unittest.TestCase):
                 state[path.removeprefix('/customers/')] = fields['metadata[optv_sample_status]']
                 return {}
             self.fail('Unexpected Stripe path: ' + path)
-        with patch.object(server, 'captcha'), patch.object(server, 'stripe', side_effect=fake_stripe), \
+        with patch.object(server, 'stripe', side_effect=fake_stripe), \
              patch.object(server, 'generate_scene', return_value=b'jpeg-bytes'), \
              patch.object(server, 'rate_limit'):
             for i in range(12):
@@ -125,7 +137,7 @@ class LiveStoreTests(unittest.TestCase):
     def test_direct_checkout_works_without_openai_and_does_not_call_image_model(self):
         os.environ.pop('OPENAI_API_KEY', None)
         payload = {'email': self.email, 'idea': self.sample_payload['idea'],
-                   'style': 'Cinematic comedy', 'turnstile_token': 'test-captcha'}
+                   'style': 'Cinematic comedy'}
         calls = []
         def fake_stripe(method, path, fields=None, **kwargs):
             calls.append((path, fields))
@@ -135,27 +147,25 @@ class LiveStoreTests(unittest.TestCase):
             self.assertEqual(fields['metadata[idea]'], self.sample_payload['idea'])
             self.assertEqual(fields['line_items[0][price_data][unit_amount]'], '2999')
             return {'url': 'https://checkout.stripe.com/c/pay/purchase'}
-        with patch.object(server, 'captcha') as challenge, \
-             patch.object(server, 'stripe', side_effect=fake_stripe), \
+        with patch.object(server, 'stripe', side_effect=fake_stripe), \
              patch.object(server, 'generate_scene') as ai:
             res = self.client.post('/api/checkout-direct', json=payload)
             self.assertEqual(res.status_code, 200, res.text)
             self.assertIn('checkout.stripe.com', res.json()['checkout_url'])
             self.assertEqual(len(calls), 1)
-            challenge.assert_called_once()
             ai.assert_not_called()
 
-    def test_direct_checkout_rejects_bad_email_or_failed_challenge(self):
+    def test_direct_checkout_rejects_bad_email_and_rate_limited_abuse(self):
         payload = {'email': 'invalid', 'idea': self.sample_payload['idea'],
-                   'style': 'Cinematic comedy', 'turnstile_token': 'bad'}
+                   'style': 'Cinematic comedy'}
         with patch.object(server, 'stripe') as payment:
             res = self.client.post('/api/checkout-direct', json=payload)
             self.assertEqual(res.status_code, 400)
             payment.assert_not_called()
         payload['email'] = self.email
-        with patch.object(server, 'captcha', side_effect=server.HTTPException(403, 'challenge failed')), \
+        with patch.object(server, 'rate_limit', side_effect=server.HTTPException(429, 'throttled')), \
              patch.object(server, 'stripe') as payment:
-            self.assertEqual(self.client.post('/api/checkout-direct', json=payload).status_code, 403)
+            self.assertEqual(self.client.post('/api/checkout-direct', json=payload).status_code, 429)
             payment.assert_not_called()
 
     def test_order_retrieval_verifies_paid_status_and_product(self):

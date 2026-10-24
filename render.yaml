@@ -21,8 +21,4 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      - key: TURNSTILE_SITE_KEY
-        sync: false
-      - key: TURNSTILE_SECRET_KEY
-        sync: false
 # No paid disk or database. Render Free is not guaranteed production uptime.
