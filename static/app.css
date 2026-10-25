@@ -36,3 +36,13 @@
 @media(max-width:1060px){.pricing-inner{grid-template-columns:1fr;gap:25px}.pricing-heading{padding-top:0}.pricing-perks{grid-column:1}}
 @media(max-width:760px){.custom-grid{grid-template-columns:1fr;gap:22px}.custom-copy{padding-top:0}.tier-prices{grid-template-columns:1fr}.tier-card{padding:25px;min-height:auto}.tier-label{min-height:0}.tier-cost{font-size:75px}.custom-section{padding:70px 0}}
 @media(max-width:650px){.custom-form{padding:20px}.pricing-perks{display:grid;gap:12px}.tier-card h3{font-size:24px}.tier-card .button{padding:16px}}
+
+/* Keep the free sample unmistakably first; paid packages are optional and collapsed. */
+.free-preview-banner{display:flex;align-items:center;gap:15px;background:#fff0b2;color:#15120c;border:2px solid #ffcc28;padding:15px 17px;margin:0 0 23px}
+.free-preview-badge{background:#15120c;color:#ffcc28;font-family:Impact,Arial,sans-serif;font-size:26px;line-height:1;padding:12px 13px;transform:rotate(-4deg)}
+.free-preview-banner strong{display:block;font-size:16px;line-height:1.15;font-weight:950;letter-spacing:.03em}
+.free-preview-banner small{display:block;margin-top:6px;font-size:12px;line-height:1.4;color:#514a30}
+.direct-order-options{border:1px solid #6b603f;background:#211f18;padding:18px;margin-top:15px}
+.direct-order-options label{display:block;margin-bottom:9px}
+.direct-order-options .button{margin-top:9px}
+@media(max-width:650px){.free-preview-banner{padding:12px;gap:11px}.free-preview-badge{font-size:21px}.free-preview-banner strong{font-size:14px}.free-preview-banner small{font-size:11px}}
