@@ -345,6 +345,7 @@ def create_checkout_session(detail, notes, fingerprint):
     fingerprint = hashlib.sha256((fingerprint + str(int(time.time() // 1200))).encode()).hexdigest()
     fields = {
         'mode': 'payment', 'customer_email': detail['e'],
+        'branding_settings[display_name]': 'OuttaPocketTV',
         'client_reference_id': 'optv-' + fingerprint[:28],
         'success_url': base_url() + '/order?session_id={CHECKOUT_SESSION_ID}',
         'cancel_url': base_url() + '/?checkout=cancelled',
