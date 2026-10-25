@@ -45,3 +45,12 @@ $('custom-request-form').addEventListener('submit',async e=>{
     button.textContent='SUBMIT CUSTOM REQUEST ↗';
   }
 });
+
+document.querySelectorAll('.tier-card a[data-duration]').forEach(link=>{
+  link.addEventListener('click',()=>{
+    const duration=link.dataset.duration;
+    $('direct-duration').value=duration;
+    $('preview-duration').value=duration;
+    $('preview-duration').dispatchEvent(new Event('change'));
+  });
+});
