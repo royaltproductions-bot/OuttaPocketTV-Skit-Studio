@@ -31,9 +31,13 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
 API_BASE = 'https://api.stripe.com/v1'
-PRICE_CENTS = 2999
+PRICE_CENTS = 2999  # Legacy default
+TIERS = {
+    15: {'price_cents': 2999, 'label': 'Up to 15 seconds'},
+    30: {'price_cents': 4999, 'label': 'Up to 30 seconds'},
+    60: {'price_cents': 8999, 'label': 'Up to 1 minute'},
+}
 PRODUCT_KEY = 'optv_custom_skit_v1'
-PRODUCT_NAME = 'OuttaPocketTV custom comedy skit (10–15 seconds)'
 STYLES = {'Cinematic comedy', 'Photoreal absurdity', 'Animated chaos', '90s sitcom', 'Mockumentary'}
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -70,6 +74,7 @@ class PreviewInput(BaseModel):
 class CheckoutInput(BaseModel):
     preview_token: str = Field(min_length=20, max_length=2400)
     instructions: str = Field(default='', max_length=450)
+    duration_seconds: int = Field(default=15)
 
 
 class DirectCheckoutInput(BaseModel):
@@ -77,6 +82,19 @@ class DirectCheckoutInput(BaseModel):
     idea: str = Field(min_length=18, max_length=450)
     style: str = Field(default='Cinematic comedy', max_length=30)
     instructions: str = Field(default='', max_length=450)
+    duration_seconds: int = Field(default=15)
+
+
+class CustomRequestInput(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    idea: str = Field(min_length=18, max_length=450)
+    style: str = Field(default='Cinematic comedy', max_length=30)
+    duration_seconds: int = Field(gt=60, le=21600)
+    instructions: str = Field(default='', max_length=450)
+
+
+class QuoteHandledInput(BaseModel):
+    customer_id: str = Field(pattern=r'^cus_[A-Za-z0-9]{8,100}$')
 
 
 class DeliveredInput(BaseModel):
@@ -305,7 +323,9 @@ def health():
 @app.get('/api/config')
 def config():
     return {'preview_enabled': configured(), 'checkout_enabled': payment_ready(),
-            'price_cents': PRICE_CENTS, 'fulfillment': 'manual_email', 'version': '1.1'}
+            'price_cents': PRICE_CENTS, 'tiers': [
+                {'duration_seconds': seconds, **tier} for seconds, tier in TIERS.items()],
+            'fulfillment': 'manual_email', 'version': '1.2'}
 
 
 @app.post('/api/preview')
@@ -339,10 +359,18 @@ def preview(item: PreviewInput, request: Request):
             'mode': 'ai', 'price_cents': PRICE_CENTS}
 
 
-def create_checkout_session(detail, notes, fingerprint):
+def selected_tier(duration_seconds):
+    tier = TIERS.get(duration_seconds)
+    if not tier:
+        raise HTTPException(400, 'Choose one of the available video lengths.')
+    return tier
+
+
+def create_checkout_session(detail, notes, fingerprint, duration_seconds=15):
+    tier = selected_tier(duration_seconds)
     # Idempotency within 20-minute windows avoids accidental duplicate sessions
     # but lets previous customers order another skit in future.
-    fingerprint = hashlib.sha256((fingerprint + str(int(time.time() // 1200))).encode()).hexdigest()
+    fingerprint = hashlib.sha256((fingerprint + str(duration_seconds) + str(int(time.time() // 1200))).encode()).hexdigest()
     fields = {
         'mode': 'payment', 'customer_email': detail['e'],
         'branding_settings[display_name]': 'OuttaPocketTV',
@@ -351,10 +379,12 @@ def create_checkout_session(detail, notes, fingerprint):
         'cancel_url': base_url() + '/?checkout=cancelled',
         'line_items[0][quantity]': '1',
         'line_items[0][price_data][currency]': 'usd',
-        'line_items[0][price_data][unit_amount]': str(PRICE_CENTS),
-        'line_items[0][price_data][product_data][name]': PRODUCT_NAME,
+        'line_items[0][price_data][unit_amount]': str(tier['price_cents']),
+        'line_items[0][price_data][product_data][name]':
+            'OuttaPocketTV custom comedy skit (' + tier['label'] + ')',
         'metadata[optv_product]': PRODUCT_KEY, 'metadata[idea]': detail['i'],
         'metadata[style]': detail['s'], 'metadata[instructions]': notes,
+        'metadata[duration_seconds]': str(duration_seconds),
         'metadata[fulfillment]': 'awaiting_manual_delivery',
     }
     session = stripe('POST', '/checkout/sessions', fields, idempotency='optv-checkout-' + fingerprint)
@@ -370,7 +400,7 @@ def checkout(item: CheckoutInput):
         raise HTTPException(503, 'Secure checkout is not enabled yet.')
     detail = read_token(item.preview_token)
     notes = item.instructions.strip()
-    return create_checkout_session(detail, notes, item.preview_token + notes)
+    return create_checkout_session(detail, notes, item.preview_token + notes, item.duration_seconds)
 
 
 @app.post('/api/checkout-direct')
@@ -384,7 +414,33 @@ def checkout_direct(item: DirectCheckoutInput, request: Request):
         raise HTTPException(400, 'Enter an original skit idea and choose a valid style.')
     rate_limit(client_ip(request), scope='checkout', limit=15)
     notes = item.instructions.strip()
-    return create_checkout_session({'e': email, 'i': idea, 's': style}, notes, email + idea + style + notes)
+    return create_checkout_session({'e': email, 'i': idea, 's': style}, notes, email + idea + style + notes, item.duration_seconds)
+
+
+@app.post('/api/custom-request')
+def create_custom_request(item: CustomRequestInput, request: Request):
+    # Custom-length quote requests persist in the same Stripe account as orders,
+    # but are separate from paid orders and never initiate a charge.
+    if not env('STRIPE_SECRET_KEY'):
+        raise HTTPException(503, 'Custom requests are temporarily unavailable.')
+    email = valid_email(item.email)
+    idea, style, notes = item.idea.strip(), item.style.strip(), item.instructions.strip()
+    if len(idea) < 18 or style not in STYLES:
+        raise HTTPException(400, 'Enter a skit idea and choose a valid style.')
+    rate_limit(client_ip(request), scope='custom_quote', limit=5)
+    signature = email + idea + style + str(item.duration_seconds) + notes
+    digest = hashlib.sha256((signature + str(int(time.time() // 1200))).encode()).hexdigest()
+    customer = stripe('POST', '/customers', {
+        'email': email,
+        'description': 'OuttaPocketTV custom-length video quote request',
+        'metadata[optv_custom_request]': 'pending',
+        'metadata[requested_duration_seconds]': str(item.duration_seconds),
+        'metadata[idea]': idea,
+        'metadata[style]': style,
+        'metadata[instructions]': notes,
+    }, idempotency='optv-custom-' + digest)
+    return {'received': True, 'request_id': customer['id'],
+            'message': 'Request received. We will review the details and contact you by email about a custom quote.'}
 
 
 def get_order(session_id):
@@ -471,12 +527,53 @@ def admin_orders(request: Request):
                 'id': session['id'], 'email': (session.get('customer_details') or {}).get('email') or session.get('customer_email') or '',
                 'amount_cents': session.get('amount_total'), 'idea': meta.get('idea', ''),
                 'style': meta.get('style', ''), 'instructions': meta.get('instructions', ''),
+                'duration_seconds': int(meta.get('duration_seconds') or 15),
                 'delivered_at': meta.get('delivered_at'), 'created_at': session.get('created'),
             })
         if not batch.get('has_more') or not batch.get('data'):
             break
         cursor = batch['data'][-1]['id']
     return {'orders': found, 'note': 'Orders and fulfillment flags are stored in Stripe, not on Render.'}
+
+
+@app.get('/api/admin/custom-requests')
+def admin_custom_requests(request: Request):
+    authorized(request)
+    found = []
+    page = None
+    # Search only OuttaPocketTV requests, not other businesses' customers.
+    for _ in range(5):
+        params = {'query': "metadata['optv_custom_request']:'pending' OR "
+                           "metadata['optv_custom_request']:'contacted'",
+                  'limit': 100}
+        if page:
+            params['page'] = page
+        batch = stripe('GET', '/customers/search', params)
+        for customer in batch.get('data', []):
+            meta = customer.get('metadata') or {}
+            found.append({
+                'id': customer['id'], 'email': customer.get('email') or '',
+                'duration_seconds': int(meta.get('requested_duration_seconds') or 0),
+                'idea': meta.get('idea', ''), 'style': meta.get('style', ''),
+                'instructions': meta.get('instructions', ''),
+                'status': meta.get('optv_custom_request'),
+                'created_at': customer.get('created'),
+            })
+        if not batch.get('has_more') or not batch.get('next_page'):
+            break
+        page = batch['next_page']
+    return {'requests': sorted(found, key=lambda item: item['created_at'] or 0, reverse=True)}
+
+
+@app.post('/api/admin/custom-request-contacted')
+def mark_quote_contacted(item: QuoteHandledInput, request: Request):
+    authorized(request)
+    customer = stripe('GET', '/customers/' + item.customer_id)
+    if (customer.get('metadata') or {}).get('optv_custom_request') not in {'pending', 'contacted'}:
+        raise HTTPException(404, 'Custom request not found.')
+    stripe('POST', '/customers/' + item.customer_id,
+           {'metadata[optv_custom_request]': 'contacted'})
+    return {'contacted': True}
 
 
 @app.post('/api/admin/delivered')
