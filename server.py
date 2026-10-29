@@ -289,10 +289,20 @@ async def headers(request, call_next):
         'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self'; "
-                                   "style-src 'self'; img-src 'self' data: blob:; "
-                                   "frame-src 'none'; connect-src 'self'; "
-                                   "form-action 'self' https://checkout.stripe.com; base-uri 'self'; object-src 'none'",
+        'Content-Security-Policy': (
+            # Google's AdSense verification loader is needed on the public homepage.
+            # Retain the existing restrictive policy on checkout, admin and API endpoints.
+            ("default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+             "style-src 'self' 'unsafe-inline' https:; "
+             "img-src 'self' data: blob: https:; "
+             "frame-src https:; connect-src 'self' https:; "
+             "form-action 'self' https://checkout.stripe.com; base-uri 'self'; object-src 'none'")
+            if request.url.path == '/' else
+            ("default-src 'self'; script-src 'self'; "
+             "style-src 'self'; img-src 'self' data: blob:; "
+             "frame-src 'none'; connect-src 'self'; "
+             "form-action 'self' https://checkout.stripe.com; base-uri 'self'; object-src 'none'")
+        ),
         'Cache-Control': 'no-store' if request.url.path.startswith('/api/') else 'public, max-age=180',
     })
     if request.headers.get('x-forwarded-proto') == 'https':
