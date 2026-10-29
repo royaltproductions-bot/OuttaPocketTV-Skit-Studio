@@ -305,6 +305,11 @@ def home():
     return FileResponse(STATIC / 'index.html', media_type='text/html')
 
 
+@app.get('/ads.txt')
+def ads_txt():
+    return FileResponse(STATIC / 'ads.txt', media_type='text/plain')
+
+
 @app.get('/order')
 def order_page():
     return FileResponse(STATIC / 'order.html', media_type='text/html')
