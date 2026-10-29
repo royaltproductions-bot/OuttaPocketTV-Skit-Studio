@@ -46,3 +46,9 @@
 .direct-order-options label{display:block;margin-bottom:9px}
 .direct-order-options .button{margin-top:9px}
 @media(max-width:650px){.free-preview-banner{padding:12px;gap:11px}.free-preview-badge{font-size:21px}.free-preview-banner strong{font-size:14px}.free-preview-banner small{font-size:11px}}
+
+/* Tiny future AdSense placements; remain invisible until an approved ad is connected. */
+.optv-ad-placement:empty{display:none}
+.optv-ad-placement:not(:empty){width:min(100% - 24px,728px);margin:10px auto;display:flex;justify-content:center;align-items:center;overflow:hidden}
+.optv-ad-placement .adsbygoogle{display:inline-block;width:320px;height:50px;max-width:100%}
+@media(min-width:800px){.optv-ad-placement .adsbygoogle{width:728px;height:90px}}
