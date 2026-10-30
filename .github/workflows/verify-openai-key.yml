@@ -80,3 +80,5 @@ jobs:
               print("FAILED: The requested image model is not accessible. HTTP", exc.code)
               sys.exit(1)
           PY
+
+# Credential presence validation only; never print the token.
