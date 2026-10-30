@@ -4,6 +4,12 @@ on:
     paths:
       - '.github/workflows/publisher-audit.yml'
       - 'tests/browser_smoke.py'
+      - 'static/index.html'
+      - 'static/app.css'
+      - 'static/about.html'
+      - 'static/privacy.html'
+      - 'static/terms.html'
+      - 'static/contact.html'
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
