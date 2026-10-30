@@ -69,6 +69,20 @@ class PublisherPagesTests(unittest.TestCase):
             self.assertIn('allowfullscreen', frame)
             ids.append(re.search(r'/player/v1/(\d+)', frame['src']).group(1))
         self.assertEqual(len(set(ids)), 6)
+        # A prior scraper incorrectly assigned each video the NEXT post's caption.
+        # Keep the verified post-ID-to-title mapping under regression coverage.
+        expected = [
+            ("7697383876368305421", "Pop-Pop’s: The First Amendment"),
+            ("7700480890257820941", "Ridiculous Ideas — Join the Team"),
+            ("7702540656266284302", "Trick or Treat?"),
+            ("7702210754451164430", "Going Through It"),
+            ("7702201665935445261", "Mental Health: Car Edition"),
+            ("7700784848306261262", "The Price Is White"),
+        ]
+        self.assertEqual(ids, [id for id, _ in expected])
+        for _, title in expected:
+            self.assertIn(title, html)
+
         self.assertNotIn('THE THREE PINNED', html)
         self.assertNotIn('THREE NEW DROPS', html)
         self.assertLess(html.index('id="watch"'), html.index('id="studio"'))
@@ -85,7 +99,7 @@ class PublisherPagesTests(unittest.TestCase):
                 continue
             self.assertIn(phrase, self.html['/privacy'] if phrase != 'BLACKGPT' else self.html['/about'])
         self.assertIn('29.99', self.html['/terms'])
-        self.assertIn('mailto:royaltproductions@gmail.com', self.html['/contact'])
+        self.assertIn('mailto:outtapockettv101@gmail.com', self.html['/contact'])
 
     def test_ads_only_load_for_content_homepage(self):
         self.assertIn('adsbygoogle.js', self.html['/'])
