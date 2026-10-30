@@ -73,3 +73,90 @@
 .watch-bottom .button{flex-shrink:0}
 @media(max-width:940px){.watch-video-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.watch-heading{display:block}.watch-profile{display:inline-block;margin-top:17px}}
 @media(max-width:580px){.watch-section{padding:60px 0 68px}.watch-heading h2{font-size:clamp(2.8rem,11vw,4.4rem)}.watch-heading>div>p{font-size:14px}.watch-video-grid{grid-template-columns:1fr;gap:30px;max-width:370px;margin:auto}.watch-video-meta h3{font-size:27px}.watch-bottom{display:block}.watch-bottom .button{margin-top:20px}.watch-video-player{aspect-ratio:9/16}}
+
+/* Publisher-ready original comedy and policy pages */
+.desktop-nav{display:flex;align-items:center;gap:clamp(12px,2.1vw,28px)}
+.topbar .desktop-nav a{white-space:nowrap}
+.mobile-nav{display:none}
+.topbar{position:relative;z-index:20}
+@media(max-width:1120px){
+ .desktop-nav{display:none!important}
+ .mobile-nav{display:block;position:relative;margin-left:auto}
+ .mobile-nav summary{cursor:pointer;list-style:none;border:2px solid #111;background:#ffcc28;padding:11px 14px;font-weight:900;font-size:12px;letter-spacing:.08em}
+ .mobile-nav summary::-webkit-details-marker{display:none}
+ .mobile-nav nav{position:absolute;display:grid;grid-template-columns:1fr;gap:0;right:0;top:100%;width:min(300px,calc(100vw - 36px));z-index:22;border:2px solid #111;background:#f7f5eb;box-shadow:6px 6px 0 #111;padding:8px}
+ .mobile-nav nav a{display:block;padding:13px 12px;text-decoration:none;border-bottom:1px solid #d7d2c7;color:#111;font-weight:900;font-size:12px;letter-spacing:.06em}
+ .mobile-nav nav a:last-child{border-bottom:none;background:#ffcc28}
+ .topbar .mobile-nav nav a:not(.navcta){display:block}
+}
+@media(max-width:650px){.mobile-nav summary{padding:9px 11px;font-size:11px}.topbar .mobile-nav nav a:not(.navcta){display:block}}
+/* The original videos and cast lead the homepage; studio services follow. */
+.hero{min-height:520px}
+.hero h1{font-size:clamp(4rem,7.4vw,7.8rem)}
+.watch-section{scroll-margin-top:20px}
+.watch-heading>div>p{max-width:800px}
+.watch-video-meta p{min-height:105px;color:#d0cabc;font-size:13px;line-height:1.56}
+.watch-video-meta h3{min-height:54px}
+.universe-section{padding:94px 0 92px;background:#f4f0e2;border-bottom:4px solid #111}
+.universe-intro{max-width:930px}
+.universe-intro h2{margin:22px 0 21px}
+.universe-intro>p{font-size:16px;color:#605b4f;max-width:790px}
+.universe-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px;margin:38px 0 42px}
+.universe-grid article{min-width:0;background:white;border:2px solid #161511;padding:25px 21px 26px;box-shadow:5px 5px 0 #ffcd32}
+.universe-number{font-size:10px;color:#9a6416;letter-spacing:.11em;font-weight:900}
+.universe-grid h3{font-size:clamp(24px,2.3vw,34px);margin:21px 0 15px}
+.universe-grid p{font-size:13px;color:#5d584e;line-height:1.62;margin:0}
+.universe-footer{border-top:2px solid #17150e;padding:29px 0 0;display:flex;justify-content:space-between;align-items:center;gap:40px}
+.universe-footer>div{max-width:770px}
+.universe-footer h3{font-size:28px;line-height:1.1;margin:0 0 10px}
+.universe-footer p{font-size:14px;color:#605a4f;margin:0}
+.universe-footer .button{flex-shrink:0}
+.footer-bottom a{color:#ffda4e;text-underline-offset:3px}
+.footer-bottom section p{max-width:540px}
+.footer-links{max-width:640px;justify-content:flex-end}
+@media(max-width:1150px){.universe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){
+ .universe-section{padding:68px 0}
+ .universe-grid{gap:14px}
+ .universe-footer{display:block}
+ .universe-footer .button{margin-top:22px}
+ .footer-links{justify-content:flex-start}
+}
+@media(max-width:480px){
+ .universe-grid{grid-template-columns:1fr}
+ .universe-intro>p{font-size:14px}
+ .watch-video-meta h3{min-height:0}
+ .watch-video-meta p{min-height:0}
+ .hero h1{font-size:clamp(3.8rem,13vw,6rem)}
+}
+/* Information pages: readable prose, same comedy-site visual identity. */
+.info-hero{background:#14130e;color:#fff;padding:72px 0 76px;border-bottom:6px solid #ffcc28}
+.info-hero .eyebrow{color:#ffcc28}
+.info-hero h1{font-size:clamp(3.8rem,8vw,7rem);max-width:1100px;margin:19px 0 23px;overflow-wrap:break-word}
+.info-hero>div>p{font-size:clamp(16px,1.8vw,20px);color:#e1dcd0;max-width:870px;line-height:1.55;margin:0}
+.info-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:72px;align-items:start;padding-top:75px;padding-bottom:95px}
+.info-article{max-width:840px;min-width:0}
+.info-article h2{font-family:Impact,"Arial Narrow",Arial,sans-serif;font-size:clamp(26px,3vw,38px);line-height:1.06;margin:43px 0 17px;color:#15130e}
+.info-article h2:first-child{margin-top:0}
+.info-article h3{font-size:25px;line-height:1.12;margin:0 0 13px}
+.info-article p{font-size:16px;line-height:1.79;color:#444138;margin-bottom:20px}
+.info-article a{color:#805900;font-weight:800;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.info-article strong{color:#211c0b}
+.info-sidebar{background:#151410;color:#fff;padding:28px 24px 32px;border:3px solid #111;box-shadow:8px 8px 0 #ffcc28;position:sticky;top:20px}
+.info-sidebar img{border-radius:50%;width:92px;height:92px;object-fit:cover}
+.info-sidebar h2{font-size:39px;margin:25px 0 12px}
+.info-sidebar p{font-size:14px;line-height:1.6;color:#d0cbbf}
+.info-sidebar .button{display:flex;width:100%;margin-top:16px;font-size:11px;padding:14px}
+.editorial-cast{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin:24px 0}
+.editorial-cast section{border:2px solid #111;padding:22px;background:#fff}
+.editorial-cast p{font-size:14px;line-height:1.65;margin-bottom:0}
+.contact-actions{display:flex;gap:15px;flex-wrap:wrap;margin:23px 0 33px}
+.policy-footer{background:#11100d;color:#fff;padding:46px 0 27px}
+.policy-footer-inner{display:flex;align-items:start;justify-content:space-between;gap:35px;border-bottom:1px solid #3d3931;padding-bottom:30px;margin-bottom:25px}
+.policy-footer strong{font-family:Impact,Arial,sans-serif;font-size:30px;line-height:1}
+.policy-footer p{font-size:12px;color:#b9b2a6;margin:7px 0 0}
+.policy-footer nav{display:flex;gap:14px 22px;flex-wrap:wrap;justify-content:flex-end;max-width:590px}
+.policy-footer nav a{font-size:11px;font-weight:900;color:#ffcf31;text-decoration:none;letter-spacing:.05em}
+.policy-footer small{font-size:10px;color:#aaa396;letter-spacing:.03em}
+@media(max-width:940px){.info-layout{grid-template-columns:1fr;gap:43px}.info-sidebar{position:static;max-width:600px}.info-hero{padding:58px 0 62px}}
+@media(max-width:580px){.info-layout{padding-top:45px;padding-bottom:68px}.info-article p{font-size:15px;line-height:1.72}.editorial-cast{grid-template-columns:1fr}.policy-footer-inner{display:block}.policy-footer nav{justify-content:flex-start;margin-top:20px}.info-hero h1{font-size:clamp(3.5rem,12vw,5rem)}}
