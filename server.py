@@ -315,6 +315,42 @@ def home():
     return FileResponse(STATIC / 'index.html', media_type='text/html')
 
 
+# Publisher information pages intentionally contain no AdSense ad tags.
+# The homepage remains the only page loading the AdSense verification script.
+@app.get('/about')
+@app.get('/about/')
+def about_page():
+    return FileResponse(STATIC / 'about.html', media_type='text/html')
+
+
+@app.get('/privacy')
+@app.get('/privacy/')
+def privacy_page():
+    return FileResponse(STATIC / 'privacy.html', media_type='text/html')
+
+
+@app.get('/terms')
+@app.get('/terms/')
+def terms_page():
+    return FileResponse(STATIC / 'terms.html', media_type='text/html')
+
+
+@app.get('/contact')
+@app.get('/contact/')
+def contact_page():
+    return FileResponse(STATIC / 'contact.html', media_type='text/html')
+
+
+@app.get('/robots.txt')
+def robots_txt():
+    return FileResponse(STATIC / 'robots.txt', media_type='text/plain')
+
+
+@app.get('/sitemap.xml')
+def sitemap_xml():
+    return FileResponse(STATIC / 'sitemap.xml', media_type='application/xml')
+
+
 @app.get('/ads.txt')
 def ads_txt():
     return FileResponse(STATIC / 'ads.txt', media_type='text/plain')
