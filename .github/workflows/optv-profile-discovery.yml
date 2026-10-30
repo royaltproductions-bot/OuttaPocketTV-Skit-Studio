@@ -29,7 +29,7 @@ jobs:
             match=re.search(r'Image \d+: (.*?) created by',after,re.S)
             desc=(match.group(1) if match else after[:125]).replace('\n',' ')
             print('VIDEO',vid,'PRE',before[-70:],'TITLE',desc[:240],flush=True)
-            if len(seen)>=45: break
+            if len(seen)>=120: break
           for vid in ['7697383876368305421','7700480890257820941','7702540656266284302','7702210754451164430']:
             for base in ['https://www.tiktok.com/player/v1/','https://www.tiktok.com/embed/v2/']:
               try:
