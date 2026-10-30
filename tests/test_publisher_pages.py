@@ -96,6 +96,13 @@ class PublisherPagesTests(unittest.TestCase):
             self.assertNotIn('adsbygoogle.js', self.client.get(path).text, path)
         self.assertNotIn('optv-ad-placement', self.html['/'])
 
+    def test_transaction_and_admin_screens_are_not_indexable(self):
+        for route in ('/order', '/admin', '/api/config'):
+            response = self.client.get(route)
+            self.assertIn('noindex', response.headers.get('x-robots-tag', ''), route)
+        for route in ('/', '/about', '/privacy', '/terms', '/contact'):
+            self.assertNotIn('noindex', self.client.get(route).headers.get('x-robots-tag', ''), route)
+
     def test_site_discovery_routes_and_static_assets(self):
         self.assertIn('Sitemap:', self.client.get('/robots.txt').text)
         sitemap = self.client.get('/sitemap.xml')
