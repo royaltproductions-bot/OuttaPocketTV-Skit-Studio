@@ -52,3 +52,43 @@
 .optv-ad-placement:not(:empty){width:min(100% - 24px,728px);margin:10px auto;display:flex;justify-content:center;align-items:center;overflow:hidden}
 .optv-ad-placement .adsbygoogle{display:inline-block;width:320px;height:50px;max-width:100%}
 @media(min-width:800px){.optv-ad-placement .adsbygoogle{width:728px;height:90px}}
+
+
+/* OPTV six-post showcase: 3 pinned + 3 recent, plus official live TikTok player. */
+.watch-section{background:#f5f2e8;padding:88px 0 85px;border-top:4px solid #111;border-bottom:4px solid #111}
+.watch-intro{display:flex;align-items:end;justify-content:space-between;gap:35px;margin-bottom:50px}
+.watch-intro h2{margin:13px 0 22px}
+.watch-intro p{font-size:16px;color:#575349;max-width:710px;margin:0}
+.watch-account-link{flex-shrink:0;margin-bottom:7px}
+.watch-group-heading{border-top:2px solid #111;display:flex;align-items:baseline;justify-content:space-between;gap:15px;padding:22px 0 17px}
+.watch-group-heading h3{font-size:27px;line-height:1;margin:0}
+.watch-group-heading p{color:#6b655a;font-size:13px;max-width:480px;margin:0}
+.watch-group-latest{margin-top:43px}
+.watch-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:19px}
+.watch-card{overflow:hidden;border:2px solid #161511;background:#fff;box-shadow:5px 5px 0 #1b1914;min-width:0;display:flex;flex-direction:column}
+.watch-card-art{position:relative;min-height:168px;padding:15px 16px;overflow:hidden;display:flex;align-items:end;justify-content:start;background:var(--watch-bg);border-bottom:2px solid #111}
+.watch-card-art:before{content:"";position:absolute;right:-60px;top:-55px;width:190px;height:190px;border:25px solid #ffffff4d;border-radius:50%}
+.watch-big{position:absolute;top:0;left:8px;font-family:Impact,sans-serif;font-size:107px;line-height:1;color:#00000020;letter-spacing:-.05em}
+.watch-emoji{position:absolute;right:24px;top:24px;font-size:65px;transform:rotate(-15deg);filter:drop-shadow(4px 7px 0 #00000020)}
+.watch-art-label{position:relative;z-index:1;font-family:Impact,Arial,sans-serif;font-size:clamp(17px,2vw,26px);background:#15130f;color:#fff;padding:8px 10px;transform:rotate(-2deg);line-height:1.05;max-width:90%}
+.watch-yellow{--watch-bg:#ffcd31}.watch-lime{--watch-bg:#c1e559}.watch-blue{--watch-bg:#95badc}.watch-orange{--watch-bg:#f6a254}.watch-pink{--watch-bg:#ed9abd}.watch-purple{--watch-bg:#bb9cf5}
+.watch-card-body{padding:23px 21px 27px;flex:1}
+.watch-tag{font-size:10px;color:#9c530f;font-weight:900;letter-spacing:.12em}
+.watch-card-body h4{font-family:Impact,"Arial Narrow",sans-serif;font-size:28px;line-height:1.08;margin:11px 0 12px}
+.watch-card-body p{font-size:13px;line-height:1.55;color:#5f5b51;margin:0}
+.watch-player-layout{margin-top:65px;background:#151410;color:#fff;display:grid;grid-template-columns:minmax(220px,.73fr) minmax(300px,1fr);align-items:start;gap:45px;padding:42px;border:3px solid #111}
+.watch-player-copy{padding-top:23px}
+.watch-player-copy h3{font-size:clamp(2.4rem,4.3vw,4.2rem);margin:24px 0}
+.watch-player-copy p{color:#c9c3b7;font-size:15px}
+.watch-player-copy .watch-small{color:#89877e;font-size:12px;line-height:1.5}
+.watch-player-copy .plain-link{color:#ffd53b;display:inline-block;margin-top:13px}
+.watch-player-box{background:#faf9f5;min-width:0;min-height:260px;padding:16px;display:flex;justify-content:center;align-items:flex-start;overflow:hidden}
+.watch-player-box blockquote{width:100%;margin:0}
+.watch-player-box blockquote section a{color:#17130a;font-weight:800}
+.watch-cta{margin-top:40px;border-top:2px solid #111;border-bottom:2px solid #111;padding:25px 0;display:flex;justify-content:space-between;align-items:center;gap:25px}
+.watch-cta b{font-family:Impact,Arial,sans-serif;font-size:29px}
+.watch-cta p{font-size:13px;color:#605a50;margin:6px 0 0}
+.watch-cta .button{flex-shrink:0}
+@media(max-width:900px){.watch-player-layout{grid-template-columns:1fr;gap:22px}.watch-player-copy{padding-top:0}}
+@media(max-width:700px){.watch-section{padding:62px 0}.watch-intro{display:block;margin-bottom:35px}.watch-intro p{font-size:14px}.watch-account-link{margin-top:20px}.watch-group-heading{display:block}.watch-group-heading p{margin-top:8px}.watch-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.watch-card-art{min-height:136px}.watch-card-body{padding:16px 13px 20px}.watch-card-body h4{font-size:23px}.watch-card-body p{font-size:12px}.watch-tag{font-size:9px}.watch-emoji{right:9px;top:24px;font-size:46px}.watch-art-label{font-size:16px}.watch-player-layout{padding:18px}.watch-player-box{padding:5px}.watch-player-box blockquote{min-width:288px}.watch-cta{display:block}.watch-cta .button{margin-top:20px}.watch-cta b{font-size:25px}}
+@media(max-width:350px){.watch-cards{grid-template-columns:1fr}.watch-player-layout{padding:8px}.watch-player-box{padding:0}}
