@@ -3,35 +3,43 @@ on:
   push:
     paths:
       - '.github/workflows/optv-profile-discovery.yml'
-  workflow_dispatch:
 jobs:
   public-profile:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Inspect public creator video metadata
+      - name: Match public TikTok video IDs to captions
         shell: python
         run: |
-          import urllib.request, urllib.parse, re, json
-          handle='outtapockettv101'
-          urls=[
-            f'https://www.tiktok.com/@{handle}',
-            f'https://www.tiktok.com/embed/@{handle}',
-            f'https://www.tiktok.com/oembed?url=https://www.tiktok.com/@{handle}',
-            f'https://r.jina.ai/https://www.tiktok.com/@{handle}',
-            f'https://www.google.com/search?q=%22{handle}%22+site%3Atiktok.com%2F%40{handle}%2Fvideo',
-          ]
-          for u in urls:
-            print('\nCHECK',u,flush=True)
+          import urllib.request, urllib.parse, re, json, html
+          target='https://www.tiktok.com/embed/@outtapockettv101'
+          req=urllib.request.Request(target,headers={'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36'})
+          with urllib.request.urlopen(req,timeout=20) as r: src=r.read(2000000).decode('utf-8','replace')
+          ids=list(dict.fromkeys(re.findall(r'/video/([0-9]{17,22})',src)))
+          print('PROFILE VIDEO IDS',ids,flush=True)
+          for id in ids:
+            index=src.find('video/'+id)
+            snippet=html.unescape(src[max(index-550,0):index+950]).replace('\\\\u002F','/')
+            snippet=re.sub(r'\s+',' ',snippet)
+            print('EMBED ID',id,'CONTEXT',snippet[:1150],flush=True)
+          chunks=re.findall(r'<script[^>]*id="(?:__UNIVERSAL_DATA_FOR_REHYDRATION__|SIGI_STATE)"[^>]*>(.*?)</script>',src,re.S)
+          for c in chunks:
             try:
-              req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36','Accept-Language':'en-US,en;q=0.9'})
-              with urllib.request.urlopen(req, timeout=18) as r:
-                src=r.read(2000000).decode('utf-8','replace')
-                print('HTTP',r.status,'bytes',len(src))
-                ids=re.findall(r'(?:video/|\\u002Fvideo\\u002F|\\/video\\/)([0-9]{17,22})',src)
-                more=re.findall(r'\"id\":\"([0-9]{17,22})\"',src)
-                print('POST_IDS',list(dict.fromkeys(ids))[:25],flush=True)
-                print('OTHER_IDS',list(dict.fromkeys(more))[:25],flush=True)
-                print('SAMPLE',re.sub(r'\s+',' ',src[:350]),flush=True)
-            except Exception as e: print('ERR',repr(e)[:400],flush=True)
+              obj=json.loads(c)
+              print('JSON KEYS',list(obj)[:20],flush=True)
+              def walk(o,parent=''):
+                if isinstance(o,dict):
+                  vid=str(o.get('id',''))
+                  if vid in ids:
+                    print('MATCH',vid,'IN',parent,'DATA',json.dumps({k:v for k,v in o.items() if k in ('id','desc','title','stats','video','isPinned','createTime','text','videoCount','itemStruct')},ensure_ascii=False)[:900],flush=True)
+                  for k,v in o.items(): walk(v,parent+'.'+k)
+                elif isinstance(o,list):
+                  for v in o[:100]: walk(v,parent+'[]')
+              walk(obj)
+            except Exception as e: print('JSON ERROR',repr(e),flush=True)
+          req=urllib.request.Request('https://r.jina.ai/https://www.tiktok.com/@outtapockettv101',headers={'User-Agent':'Mozilla/5.0'})
+          with urllib.request.urlopen(req,timeout=30) as r: md=r.read(100000).decode('utf-8','replace')
+          for id in ids:
+            ix=md.find(id)
+            print('JINA',id,re.sub(r'\s+',' ',md[max(ix-320,0):ix+360]) if ix>=0 else 'NOT FOUND',flush=True)
