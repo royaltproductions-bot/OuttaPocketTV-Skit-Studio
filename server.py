@@ -305,6 +305,12 @@ async def headers(request, call_next):
         ),
         'Cache-Control': 'no-store' if request.url.path.startswith('/api/') else 'public, max-age=180',
     })
+    if (request.url.path in {'/order', '/admin'} or
+            request.url.path.startswith('/api/') or
+            request.url.path.startswith('/static/admin')):
+        # Payment confirmations, owner tools and API responses are not
+        # publisher articles and should not appear in search results.
+        response.headers['X-Robots-Tag'] = 'noindex, nofollow'
     if request.headers.get('x-forwarded-proto') == 'https':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
