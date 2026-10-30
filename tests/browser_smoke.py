@@ -48,6 +48,15 @@ async def run():
             response = await desktop.goto(BASE+path,wait_until="domcontentloaded",timeout=15000)
             assert response.status == 200, (path,response.status)
             results.append({"route":path,"status":response.status})
+        # Also verify each new standalone page fits a narrow phone.
+        phone = await browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True)
+        for route in ("/about", "/privacy", "/terms", "/contact"):
+            response = await phone.goto(BASE+route,wait_until="domcontentloaded",timeout=15000)
+            assert response.status == 200
+            measured = await phone.evaluate("() => ({viewport: document.documentElement.clientWidth, width: document.documentElement.scrollWidth})")
+            assert measured["width"] <= measured["viewport"]+5, (route,"horizontal overflow",measured)
+            results.append({"mobile_route":route,"width":measured["width"],"viewport":measured["viewport"],"status":"pass"})
+        await phone.close()
         # A video player endpoint must be reachable, not just a fabricated link.
         req = urllib.request.Request(f"https://www.tiktok.com/player/v1/{VID}", headers={"User-Agent":"Mozilla/5.0"})
         try:
