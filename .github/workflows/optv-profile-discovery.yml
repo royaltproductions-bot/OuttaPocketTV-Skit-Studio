@@ -1,0 +1,37 @@
+name: OPTV TikTok Public Link Discovery
+on:
+  push:
+    paths:
+      - '.github/workflows/optv-profile-discovery.yml'
+  workflow_dispatch:
+jobs:
+  public-profile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Inspect public creator video metadata
+        shell: python
+        run: |
+          import urllib.request, urllib.parse, re, json
+          handle='outtapockettv101'
+          urls=[
+            f'https://www.tiktok.com/@{handle}',
+            f'https://www.tiktok.com/embed/@{handle}',
+            f'https://www.tiktok.com/oembed?url=https://www.tiktok.com/@{handle}',
+            f'https://r.jina.ai/https://www.tiktok.com/@{handle}',
+            f'https://www.google.com/search?q=%22{handle}%22+site%3Atiktok.com%2F%40{handle}%2Fvideo',
+          ]
+          for u in urls:
+            print('\nCHECK',u,flush=True)
+            try:
+              req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36','Accept-Language':'en-US,en;q=0.9'})
+              with urllib.request.urlopen(req, timeout=18) as r:
+                src=r.read(2000000).decode('utf-8','replace')
+                print('HTTP',r.status,'bytes',len(src))
+                ids=re.findall(r'(?:video/|\\u002Fvideo\\u002F|\\/video\\/)([0-9]{17,22})',src)
+                more=re.findall(r'\"id\":\"([0-9]{17,22})\"',src)
+                print('POST_IDS',list(dict.fromkeys(ids))[:25],flush=True)
+                print('OTHER_IDS',list(dict.fromkeys(more))[:25],flush=True)
+                print('SAMPLE',re.sub(r'\s+',' ',src[:350]),flush=True)
+            except Exception as e: print('ERR',repr(e)[:400],flush=True)
