@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /order
+Disallow: /api/
+Sitemap: https://outtapockettv-skit-studio.onrender.com/sitemap.xml
