@@ -30,7 +30,8 @@ async def run():
             })""")
             assert data["width"] <= data["viewport"] + 5, (width, 'horizontal overflow', data)
             assert data["watchTop"] < data["studioTop"], data
-            if mobile:
+            # The responsive menu intentionally appears on tablet too.
+            if width < 1121:
                 await page.locator('.mobile-nav summary').click()
                 assert await page.locator('.mobile-nav').evaluate("(el) => el.open")
                 assert await page.locator('.mobile-nav nav a[href="/about"]').is_visible()
