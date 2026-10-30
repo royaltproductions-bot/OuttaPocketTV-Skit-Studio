@@ -28,6 +28,9 @@ async def run():
                 studioTop: document.querySelector('#studio').offsetTop,
                 navVisible: !!document.querySelector('.mobile-nav') && getComputedStyle(document.querySelector('.mobile-nav')).display !== 'none'
             })""")
+            if data["width"] > data["viewport"] + 5:
+                offenders = await page.evaluate("""() => [...document.querySelectorAll('body *')].map(x => ({tag:x.tagName,cls:String(x.className).slice(0,90),text:(x.textContent||'').trim().slice(0,45),rect:x.getBoundingClientRect().right})).filter(x=>x.rect>document.documentElement.clientWidth+7).slice(0,22)""")
+                print("OVERFLOW_DIAGNOSTIC", width, json.dumps(offenders, ensure_ascii=False), flush=True)
             assert data["width"] <= data["viewport"] + 5, (width, 'horizontal overflow', data)
             assert data["watchTop"] < data["studioTop"], data
             # The responsive menu intentionally appears on tablet too.
