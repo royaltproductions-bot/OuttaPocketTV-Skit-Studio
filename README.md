@@ -11,6 +11,18 @@ A real working web storefront that generates a free watermarked AI scene, then s
 - **Abuse checks:** Render's forwarded visitor IP is used for temporary per-IP throttling, and Stripe Customer metadata records one free sample per email across restarts. **No global daily generation cap.** Set OpenAI project spending alerts before opening free generations. Email aliases, VPNs, and forged forwarding headers can bypass IP limits; this is a pilot safeguard, not absolute protection.
 - **Fulfillment:** owner creates the actual video, sends MP4 by email, and records completed delivery in Stripe using `/admin`. No video-generation charges until an order is placed.
 
+
+## Print-on-demand merch (no inventory or new site subscription)
+
+The home page includes an OuttaPocketTV Merch section. Without a fulfillment shop, it displays three visibly labeled design concepts and **never pretends they are purchasable**. The homepage JavaScript fetches `/api/merch` from this server. Once the store has published print-on-demand products, the server automatically displays the real product names, pictures, prices, and links to Fourthwall's hosted product/checkout pages. Orders are paid to and fulfilled by Fourthwall; this site's existing Stripe video checkout stays separate.
+
+Merchant-only configuration in Render environment:
+- `FOURTHWALL_STOREFRONT_TOKEN`: Fourthwall Storefront API token (from the shop's developer settings), never put in GitHub or frontend JavaScript.
+- `FOURTHWALL_SHOP_DOMAIN`: the shop's verified `*.fourthwall.com` domain, **hostname only** (not a full URL).
+- The public catalog endpoint reads `/v1/collections/all/products`, filters published real products, and fails safely to previews on missing configuration or provider outages.
+- The shop account, product artwork upload/publication, and business/payout verification are merchant-controlled. The site cannot perform those steps without authenticated merchant authorization.
+- No inventory, manufacturing advance payment, separate site hosting, or monthly fee is required for Fourthwall's free plan. Product/processing/shipping charges are reflected in checkout/vendor payouts.
+
 ## Privacy and security
 
 No local SQLite database, persistent volume or uploaded MP4s. Customer ideas and email go to Stripe in order/customer records. Scene text (not email) goes to OpenAI, plus a pseudonymous identifier. Never put any secret or customer data in the **public repository**. Owner access uses a private `ADMIN_TOKEN` bearer secret; no client-provided prices. HTML has CSP, security headers, strict input lengths and signed 72-hour preview tokens. Direct checkout uses per-IP rate limiting and does not invoke OpenAI. Signed tokens are not encrypted; treat them as customer-private browser data.
