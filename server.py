@@ -377,6 +377,64 @@ def health():
     return {'ok': True}
 
 
+
+# Print-on-demand catalog: never show purchase links before merchant setup.
+def fourthwall_products():
+    token = env('FOURTHWALL_STOREFRONT_TOKEN')
+    domain = env('FOURTHWALL_SHOP_DOMAIN').lower()
+    if not (token and domain.endswith('.fourthwall.com') and
+            re.fullmatch(r'[a-z0-9.-]+', domain) and '..' not in domain):
+        return {'mode': 'preview', 'products': []}
+    try:
+        response = requests.get(
+            'https://storefront-api.fourthwall.com/v1/collections/all/products',
+            params={'storefront_token': token, 'page': 0, 'size': 50},
+            timeout=9)
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError):
+        return {'mode': 'preview', 'products': []}
+    if not isinstance(payload, dict) or not isinstance(payload.get('results'), list):
+        return {'mode': 'preview', 'products': []}
+    items = []
+    for product in payload['results'][:50]:
+        if not isinstance(product, dict) or product.get('type') != 'PRODUCT':
+            continue
+        slug = product.get('slug')
+        if not isinstance(slug, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]{0,150}', slug):
+            continue
+        name = str(product.get('name') or '')[:150]
+        if not name:
+            continue
+        image = ''
+        images = product.get('images')
+        if isinstance(images, list) and images and isinstance(images[0], dict):
+            image = images[0].get('url') or images[0].get('src') or ''
+        if not image and isinstance(product.get('previewImage'), dict):
+            image = product['previewImage'].get('url') or ''
+        if not isinstance(image, str) or not image.startswith('https://'):
+            image = ''
+        prices = []
+        for variant in product.get('variants') or []:
+            if not isinstance(variant, dict):
+                continue
+            price = variant.get('unitPrice') or {}
+            if (isinstance(price, dict) and isinstance(price.get('value'), (int, float))
+                    and price.get('currency') == 'USD' and price['value'] >= 0):
+                prices.append(price['value'])
+        state = product.get('state') or {}
+        available = (state.get('type', 'AVAILABLE') == 'AVAILABLE') if isinstance(state, dict) else False
+        items.append({'name': name, 'image': image, 'price': min(prices) if prices else None,
+                      'currency': 'USD', 'available': available,
+                      'url': 'https://' + domain + '/products/' + slug})
+    return {'mode': 'live' if items else 'preview', 'products': items}
+
+
+@app.get('/api/merch')
+def merch_catalog():
+    return fourthwall_products()
+
+
 @app.get('/api/config')
 def config():
     return {'preview_enabled': configured(), 'checkout_enabled': payment_ready(),
