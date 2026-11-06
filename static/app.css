@@ -197,3 +197,19 @@
 .merch-buy:hover{box-shadow:2px 2px 0 #111;transform:translate(1px,1px)}
 @media(max-width:840px){.merch-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.merch-head>b{display:none}}
 @media(max-width:560px){.merch-section{padding:60px 0}.merch-grid{grid-template-columns:1fr}.merch-head h2{font-size:clamp(3rem,12vw,4.3rem)}}
+
+/* Official social accounts */
+.official-socials{padding:64px 0;background:var(--yellow);border-block:2px solid var(--ink);scroll-margin-top:24px}
+.official-socials-heading{max-width:760px;margin-bottom:28px}
+.official-socials-heading .eyebrow{color:var(--ink)}
+.official-socials-heading h2{font-size:clamp(2rem,5vw,3.5rem);line-height:1.08;margin:12px 0 16px}
+.official-socials-heading p{font-size:16px;max-width:620px}
+.official-socials-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:18px}
+.official-social-card{display:flex;flex-direction:column;gap:12px;padding:25px;background:var(--ink);color:white;border:2px solid var(--ink);text-decoration:none;min-width:0;transition:transform .15s ease,box-shadow .15s ease}
+.official-social-platform{display:flex;justify-content:space-between;gap:16px;font-size:25px;font-weight:900}
+.official-social-handle{overflow-wrap:anywhere;color:#e5e1d5;font-size:15px}
+.official-social-action{color:var(--yellow);font-size:12px;font-weight:900;letter-spacing:.06em;margin-top:12px}
+.official-social-card:hover{transform:translateY(-3px);box-shadow:5px 5px 0 #b78600}
+.official-social-card:focus-visible{outline:3px solid var(--ink);outline-offset:5px}
+@media(prefers-reduced-motion:reduce){.official-social-card{transition:none}.official-social-card:hover{transform:none}}
+@media(max-width:650px){.official-socials{padding:44px 0}.official-social-card{padding:22px}}
